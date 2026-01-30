@@ -1,0 +1,50 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" >
+    <meta name="viewport" content="width=device-width, initial-scale=1" >
+    <title>Syracuse District Lookup</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" >
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin >
+    <link       href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;600&family=Playfair+Display:wght@600&display=swap"
+      rel="stylesheet"
+    >
+    <link rel="stylesheet" href="styles.css" >
+  <meta property="og:image" content="https://tiiny.host/assets/logo-purple-bg.png" data-id="th-modified" ><meta property="og:url" content="https://councildistrict.tiiny.co/" data-id="th-modified" ><meta property="og:type" content="website" data-id="th-modified" ><script defer data-domain="councildistrict.tiiny.co" src="https://analytics.tiiny.site/js/plausible.js"></script></head>
+  <body>
+    <div class="flag-bg" aria-hidden="true"></div>
+
+    <header class="site-header">
+      <img src="logo.png" alt="Syracuse" class="logo" >
+      <div class="brand">
+        <h1>Syracuse District Finder</h1>
+      </div>
+    </header>
+
+    <main class="content">
+      <div class="stack">
+        <section class="search-card">
+        <label for="address" class="label">Address</label>
+        <div class="input-row">
+          <input             id="address"
+            type="text"
+            placeholder="Enter an address in Syracuse for district information"
+            autocomplete="street-address"
+          >
+          <button type="button" id="search">Search</button>
+        </div>
+        <p class="hint">Example: 201 E Jefferson St, Syracuse, NY</p>
+        </section>
+
+        <section class="results-card" aria-live="polite">
+          <h2>District Result</h2>
+          <div id="results" class="results">Enter an address to see district details.</div>
+        </section>
+      </div>
+    </main>
+
+    <script src="data2.js"></script>
+    <script src="data.js"></script>
+    <script src="scripts.js"></script>
+  </body>
+</html>
