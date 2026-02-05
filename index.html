@@ -1,50 +1,126 @@
-<!doctype html>
+<!DOCTYPE html>
 <html lang="en">
   <head>
-    <meta charset="utf-8" >
-    <meta name="viewport" content="width=device-width, initial-scale=1" >
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Syracuse District Lookup</title>
-    <link rel="preconnect" href="https://fonts.googleapis.com" >
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin >
-    <link       href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;600&family=Playfair+Display:wght@600&display=swap"
+    <link
+      href="https://fonts.googleapis.com/css2?family=Rubik:wght@400;700&family=Rubik+Mono+One&display=swap"
       rel="stylesheet"
-    >
-    <link rel="stylesheet" href="styles.css" >
-  <meta property="og:image" content="https://tiiny.host/assets/logo-purple-bg.png" data-id="th-modified" ><meta property="og:url" content="https://councildistrict.tiiny.co/" data-id="th-modified" ><meta property="og:type" content="website" data-id="th-modified" ><script defer data-domain="councildistrict.tiiny.co" src="https://analytics.tiiny.site/js/plausible.js"></script></head>
+    />
+    <link
+      href="https://stackpath.bootstrapcdn.com/bootstrap/4.5.2/css/bootstrap.min.css"
+      rel="stylesheet"
+    />
+    <link rel="stylesheet" href="styles.css" />
+  </head>
+
   <body>
-    <div class="flag-bg" aria-hidden="true"></div>
+    <div class="container">
+      <h1 class="main-heading">
+        <span class="gold">Common Councilor</span>
+        <br />
+        Lookup
+      </h1>
 
-    <header class="site-header">
-      <img src="logo.png" alt="Syracuse" class="logo" >
-      <div class="brand">
-        <h1>Syracuse District Finder</h1>
-      </div>
-    </header>
+      <p class="lead-line">
+        Enter an address to find your council district, ward, and councilor.
+      </p>
 
-    <main class="content">
-      <div class="stack">
-        <section class="search-card">
-        <label for="address" class="label">Address</label>
-        <div class="input-row">
-          <input             id="address"
-            type="text"
-            placeholder="Enter an address in Syracuse for district information"
-            autocomplete="street-address"
-          >
-          <button type="button" id="search">Search</button>
+      <!-- <p class="sub-line">Common Council District &amp; Ward</p> -->
+
+      <div class="info-columns" aria-label="How this tool works">
+        <div class="info-bubble">
+          <p class="bubble-title">
+            <span class="bubble-num">1)</span> Type an address
+          </p>
+          <p class="bubble-text">
+            Use a house number and street name.
+            <span class="example">Example: 201 E Jefferson St</span>
+          </p>
         </div>
-        <p class="hint">Example: 201 E Jefferson St, Syracuse, NY</p>
-        </section>
 
-        <section class="results-card" aria-live="polite">
-          <h2>District Result</h2>
-          <div id="results" class="results">Enter an address to see district details.</div>
-        </section>
+        <div class="info-bubble">
+          <p class="bubble-title">
+            <span class="bubble-num">2)</span> Get your match
+          </p>
+          <p class="bubble-text">
+            Your district, ward, and councilor are shown based on your address.
+          </p>
+        </div>
+
+        <div class="info-bubble">
+          <p class="bubble-title">
+            <span class="bubble-num">3)</span> Not sure?
+          </p>
+          <p class="bubble-text">
+            Begin typing your address. We’ll suggest the closest street matches as you go.
+          </p>
+        </div>
       </div>
-    </main>
 
+      <!-- Search -->
+      <div class="table-container table-responsive">
+        <div class="search-container">
+          <label class="sr-only" for="search-input">Search by address</label>
+          <input
+            id="search-input"
+            class="form-control"
+            placeholder="Start typing an address…"
+            autocomplete="off"
+            inputmode="text"
+          />
+          <div id="typeahead" class="typeahead" style="display: none"></div>
+        </div>
+
+ 
+        <div id="spotlight" class="spotlight" style="display: none">
+          <div class="spotlight-left">
+            <div class="spotlight-kicker">Match</div>
+            <div class="spotlight-district">
+              <span id="spotlight-district"></span>
+              <span class="spotlight-ward">
+                <span class="sr-only">Ward</span>
+                <span id="spotlight-ward"></span>
+              </span>
+            </div>
+            <div id="spotlight-address" class="spotlight-address"></div>
+          </div>
+          <div class="spotlight-right">
+            <div class="spotlight-kicker">Councilor</div>
+            <div id="spotlight-councilor" class="spotlight-councilor"></div>
+          </div>
+        </div>
+
+        <div id="suggestion-message" class="results-banner" style="display: none"></div>
+        <div id="no-results" class="no-results" style="display: none"></div>
+        <div id="load-error" class="load-error" style="display: none"></div>
+
+        <table class="table table-striped mb-0">
+          <thead>
+            <tr>
+              <th>Address </th>
+              <th>District</th>
+              <th>Ward</th>
+              <th>Councilor</th>
+            </tr>
+          </thead>
+          <tbody id="results-tbody"></tbody>
+        </table>
+      </div>
+
+      <div style="display: none">
+        <input id="address" />
+        <button id="search">Search</button>
+        <div id="results"></div>
+      </div>
+    </div>
+
+    <!-- Data -->
     <script src="data2.js"></script>
     <script src="data.js"></script>
+
+    <!-- App -->
     <script src="scripts.js"></script>
   </body>
 </html>
