@@ -114,11 +114,11 @@ body {
 }
 
 .table-container .table-striped tbody tr:nth-of-type(odd) {
-  background-color: rgba(255, 255, 255, 0.18);
+  background-color: #c1cad6;
 }
 
 .table-container .table-striped tbody tr:hover {
-  background-color: rgba(0, 49, 83, 0.06);
+  background-color: #c1cad6;
 }
 
 .search-container {
@@ -185,27 +185,27 @@ body {
 
 .spotlight-left {
   flex: 1 1 auto;
-  background: rgba(0, 49, 83, 0.08);
+  background: #c1cad6;
 }
 
 .spotlight-right {
   width: 35%;
   min-width: 220px;
-  background: rgba(0, 49, 83, 0.12);
+  background: #c1cad6;
   border-left: 1px solid rgba(0, 49, 83, 0.18);
 }
 
 .spotlight-kicker {
   font-weight: 700;
   font-size: 0.85rem;
-  color: rgba(0, 49, 83, 0.8);
+  color: #062858;
 }
 
 .spotlight-district {
   margin-top: 6px;
   font-family: "Rubik Mono One", sans-serif;
   letter-spacing: 2px;
-  color: var(--blue);
+  color: #062858;
   font-size: 1.6rem;
   line-height: 1.15;
   text-transform: uppercase;
@@ -215,7 +215,7 @@ body {
   font-family: "Rubik", sans-serif;
   font-size: 0.95rem;
   letter-spacing: 0.04em;
-  color: rgba(0, 49, 83, 0.85);
+  color: #062858;
   display: inline-block;
   margin-left: 8px;
   text-transform: none;
@@ -223,14 +223,14 @@ body {
 
 .spotlight-address {
   margin-top: 6px;
-  color: rgba(0, 49, 83, 0.9);
+  color: #062858;
   font-weight: 400;
 }
 
 .spotlight-councilor {
   margin-top: 6px;
   font-weight: 700;
-  color: var(--blue);
+  color: #062858;
   font-size: 1.15rem;
 }
 
@@ -238,8 +238,8 @@ body {
   display: inline-block;
   padding: 8px 14px;
   border-radius: 999px;
-  background: rgba(0, 49, 83, 0.12);
-  color: var(--blue);
+  background: #c1cad6;
+  color: #062858;
   font-weight: 700;
   margin: 0 0 10px;
 }
@@ -251,7 +251,7 @@ body {
   border-radius: 10px;
   border: 1px solid rgba(0, 49, 83, 0.35);
   color: #062858;
-  background: rgba(255, 255, 255, 0.75);
+  background: #c1cad6;
 }
 
 /* Accessibility */
