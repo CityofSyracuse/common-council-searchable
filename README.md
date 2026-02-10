@@ -10,10 +10,9 @@
 * Tim Liles
 * Mel Saffold
 
-**Current Maintainer:**
-
-* Mel Saffold
-
+**Current Maintainer:** Mel Saffold
+  
+**Current Maintainer:** https://syr-common-councilor-lookup.netlify.app/
 ---
 
 ## Project Summary
