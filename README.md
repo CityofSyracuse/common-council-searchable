@@ -12,7 +12,7 @@
 
 **Current Maintainer:** Mel Saffold
   
-**Current Maintainer:** https://syr-common-councilor-lookup.netlify.app/
+**Site:** https://syr-common-councilor-lookup.netlify.app/
 ---
 
 ## Project Summary
