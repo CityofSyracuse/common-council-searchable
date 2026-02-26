@@ -1,900 +1,839 @@
-const input = document.querySelector("#address");
-const results = document.querySelector("#results");
-const searchButton = document.querySelector("#search");
-const v4Input = document.querySelector("#search-input") || input;
-const resultsBody = document.querySelector("#results-tbody");
-const noResults = document.querySelector("#no-results");
-const suggestionMessage = document.querySelector("#suggestion-message");
-const loadError = document.querySelector("#load-error");
-const typeahead = document.querySelector("#typeahead");
-const spotlight = document.querySelector("#spotlight");
+(() => {
+  const input =
+    document.querySelector("#search-input") || document.querySelector("#address");
+  const searchBtn =
+    document.querySelector("#search-btn") || document.querySelector("#search");
 
-const spotlightDistrict = document.querySelector("#spotlight-district");
-const spotlightWard = document.querySelector("#spotlight-ward");
-const spotlightAddress = document.querySelector("#spotlight-address");
-const spotlightCouncilor = document.querySelector("#spotlight-councilor");
+  const resultsSection = document.querySelector("#results");
+  const resultsBody = document.querySelector("#results-tbody");
 
-let streetData = [];
-let streetDataBackup = [];
-let dataLoaded = false;
+  const suggestionMessage = document.querySelector("#suggestion-message");
+  const noResults = document.querySelector("#no-results");
+  const loadError = document.querySelector("#load-error");
 
-function parseCsv(text) {
-  const rows = [];
-  let row = [];
-  let value = "";
-  let inQuotes = false;
+  const spotlight = document.querySelector("#spotlight");
+  const spotlightDistrict = document.querySelector("#spotlight-district");
+  const spotlightWard = document.querySelector("#spotlight-ward");
+  const spotlightAddress = document.querySelector("#spotlight-address");
+  const spotlightTitleName = document.querySelector("#spotlight-title-name");
+  const spotlightContactLink = document.querySelector("#spotlight-contact-link");
 
-  for (let i = 0; i < text.length; i += 1) {
-    const char = text[i];
-    const next = text[i + 1];
+  if (!input) return;
 
-    if (char === "\"") {
-      if (inQuotes && next === "\"") {
-        value += "\"";
-        i += 1;
-      } else {
-        inQuotes = !inQuotes;
-      }
-      continue;
-    }
-
-    if (char === "," && !inQuotes) {
-      row.push(value);
-      value = "";
-      continue;
-    }
-
-    if ((char === "\n" || char === "\r") && !inQuotes) {
-      if (char === "\r" && next === "\n") {
-        i += 1;
-      }
-      row.push(value);
-      rows.push(row);
-      row = [];
-      value = "";
-      continue;
-    }
-
-    value += char;
-  }
-
-  if (value.length || row.length) {
-    row.push(value);
-    rows.push(row);
-  }
-
-  return rows;
-}
-
-const TOKEN_MAP = {
-  st: "street",
-  street: "street",
-  rd: "road",
-  road: "road",
-  ave: "avenue",
-  avenue: "avenue",
-  blvd: "boulevard",
-  boulevard: "boulevard",
-  dr: "drive",
-  drive: "drive",
-  ln: "lane",
-  lane: "lane",
-  ct: "court",
-  court: "court",
-  pl: "place",
-  place: "place",
-  ter: "terrace",
-  terrace: "terrace",
-  terr: "terrace",
-  pkwy: "parkway",
-  parkway: "parkway",
-  hwy: "highway",
-  highway: "highway",
-  cir: "circle",
-  circle: "circle",
-  sq: "square",
-  square: "square",
-  way: "way",
-  av: "avenue",
-  aven: "avenue",
-  n: "north",
-  north: "north",
-  s: "south",
-  south: "south",
-  e: "east",
-  east: "east",
-  w: "west",
-  west: "west",
-  ne: "northeast",
-  northeast: "northeast",
-  nw: "northwest",
-  northwest: "northwest",
-  se: "southeast",
-  southeast: "southeast",
-  sw: "southwest",
-  southwest: "southwest",
-};
-
-const ORDINAL_MAP = {
-  "1st": "first",
-  "2nd": "second",
-  "3rd": "third",
-  "4th": "fourth",
-  "5th": "fifth",
-  "6th": "sixth",
-  "7th": "seventh",
-  "8th": "eighth",
-  "9th": "ninth",
-  "10th": "tenth",
-  "11th": "eleventh",
-  "12th": "twelfth",
-  "13th": "thirteenth",
-  "14th": "fourteenth",
-  "15th": "fifteenth",
-  "16th": "sixteenth",
-  "17th": "seventeenth",
-  "18th": "eighteenth",
-  "19th": "nineteenth",
-  "20th": "twentieth",
-};
-
-const STREET_TYPES = new Set([
-  "street",
-  "road",
-  "avenue",
-  "boulevard",
-  "drive",
-  "lane",
-  "court",
-  "place",
-  "terrace",
-  "parkway",
-  "highway",
-  "circle",
-  "square",
-  "way",
-]);
-
-function normalizeOrdinal(token) {
-  if (ORDINAL_MAP[token]) {
-    return ORDINAL_MAP[token];
-  }
-  return token.replace(/(\d+)(st|nd|rd|th)$/, (_, num) => {
-    return ORDINAL_MAP[`${num}th`] || num;
-  });
-}
-
-function normalizeTokens(value) {
-  return value
-    .toLowerCase()
-    .replace(/[.,]/g, "")
-    .split(/\s+/)
-    .filter(Boolean)
-    .map((token) => normalizeOrdinal(TOKEN_MAP[token] || token));
-}
-
-function normalizeStreetName(value) {
-  return normalizeTokens(value).join(" ").trim();
-}
-
-function baseStreetName(tokens) {
-  if (!tokens.length) {
-    return "";
-  }
-  const last = tokens[tokens.length - 1];
-  if (STREET_TYPES.has(last)) {
-    return tokens.slice(0, -1).join(" ").trim();
-  }
-  return tokens.join(" ").trim();
-}
-
-function parseAddress(address) {
-  const trimmed = address.trim();
-  if (!trimmed) {
-    return null;
-  }
-  const base = trimmed.split(",")[0].trim();
-  const match = base.match(/^(\d+)\s+(.+)$/);
-  if (!match) {
-    return null;
-  }
-
-  const streetRaw = match[2]
-    .replace(/\b(apt|unit|suite|#)\b.*$/i, "")
-    .trim();
-
-  const tokens = normalizeTokens(streetRaw);
-  const baseName = baseStreetName(tokens);
-  const lastToken = tokens[tokens.length - 1];
-  const hasTypeToken = STREET_TYPES.has(lastToken);
-
-  return {
-    number: Number.parseInt(match[1], 10),
-    streetRaw,
-    streetNormalized: tokens.join(" ").trim(),
-    streetBase: baseName,
-    hasTypeToken,
+  const COUNCILOR_META_BY_DISTRICT = {
+    "1": {
+      name: "Marino L. Nave",
+      url: "https://www.syr.gov/Departments/Common-Council/Councilors/Councilor-District-1",
+    },
+    "2": {
+      name: "Donna Moore",
+      url: "https://www.syr.gov/Departments/Common-Council/Councilors/Councilor-District-2",
+    },
+    "3": {
+      name: "Corey J. Williams",
+      url: "https://www.syr.gov/Departments/Common-Council/Councilors/Councilor-District-3",
+    },
+    "4": {
+      name: "Patrona Jones-Rowser",
+      url: "https://www.syr.gov/Departments/Common-Council/Councilors/Councilor-District-4",
+    },
+    "5": {
+      name: "Jimmy Monto",
+      url: "https://www.syr.gov/Departments/Common-Council/Councilors/Councilor-District-5",
+    },
   };
-}
 
-function matchesRange(addressNumber, rangeType) {
-  const normalized = (rangeType || "").toLowerCase();
-  if (normalized.includes("odd")) {
-    return addressNumber % 2 === 1;
-  }
-  if (normalized.includes("even")) {
-    return addressNumber % 2 === 0;
-  }
-  return true;
-}
-
-function titleCase(value) {
-  return value
-    .split(" ")
-    .filter(Boolean)
-    .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
-    .join(" ");
-}
-
-function buildDataset(dataArray) {
-  const isRangeDataset = dataArray[0] && dataArray[0].length >= 6;
-  return dataArray.map((row) => {
-    const streetName = normalizeStreetName(row[isRangeDataset ? 3 : 1] || "");
-    const baseName = baseStreetName(streetName.split(" "));
-    return {
-      numFrom: isRangeDataset ? Number.parseInt(row[0], 10) : null,
-      numTo: isRangeDataset ? Number.parseInt(row[1], 10) : null,
-      rangeType: isRangeDataset ? row[2] || "" : "all",
-      streetName,
-      streetBase: baseName,
-      ward: row[isRangeDataset ? 4 : 3] || "",
-      cityCouncil: row[isRangeDataset ? 5 : 2] || "",
-      streetNumber: isRangeDataset ? null : String(row[0] || "").trim(),
-    };
-  });
-}
-
-function isExactMatch(row, parsed) {
-  if (!row.streetNumber) return false;
-  if (parsed.streetNormalized !== row.streetName) return false;
-  return String(parsed.number) === row.streetNumber;
-}
-
-function isRangeMatch(row, addressNumber) {
-  if (Number.isNaN(row.numFrom) || Number.isNaN(row.numTo)) return false;
-  return (
-    addressNumber >= row.numFrom &&
-    addressNumber <= row.numTo &&
-    matchesRange(addressNumber, row.rangeType)
-  );
-}
-
-function findCandidates(parsed, dataset) {
-  const hasExactData = dataset.some((row) => row.streetNumber);
-  if (hasExactData) {
-    const exactMatches = dataset.filter((row) => isExactMatch(row, parsed));
-    if (exactMatches.length) {
-      return exactMatches;
-    }
+  function getCouncilorMeta(districtNum) {
+    const key = String(districtNum || "").trim();
+    return COUNCILOR_META_BY_DISTRICT[key] || { name: "", url: "" };
   }
 
-  if (parsed.hasTypeToken) {
-    return dataset.filter((row) => {
-      if (parsed.streetNormalized !== row.streetName) return false;
-      if (row.streetNumber) {
-        return String(parsed.number) === row.streetNumber;
-      }
-      return isRangeMatch(row, parsed.number);
-    });
+  function show(el) {
+    if (!el) return;
+    el.hidden = false;
   }
 
-  return dataset.filter((row) => {
-    if (row.streetBase !== parsed.streetBase) return false;
-    if (row.streetNumber) {
-      return String(parsed.number) === row.streetNumber;
-    }
-    return isRangeMatch(row, parsed.number);
-  });
-}
-
-function uniqueCandidatesByStreet(candidates) {
-  const seen = new Map();
-  candidates.forEach((row) => {
-    if (!seen.has(row.streetName)) {
-      seen.set(row.streetName, row);
-    }
-  });
-  return Array.from(seen.values());
-}
-
-function levenshteinDistance(a, b) {
-  const aLen = a.length;
-  const bLen = b.length;
-  if (!aLen) return bLen;
-  if (!bLen) return aLen;
-  const matrix = [];
-  for (let i = 0; i <= bLen; i++) {
-    matrix[i] = [i];
-  }
-  for (let j = 0; j <= aLen; j++) {
-    matrix[0][j] = j;
-  }
-  for (let i = 1; i <= bLen; i++) {
-    for (let j = 1; j <= aLen; j++) {
-      if (b.charAt(i - 1) === a.charAt(j - 1)) {
-        matrix[i][j] = matrix[i - 1][j - 1];
-      } else {
-        matrix[i][j] = Math.min(
-          matrix[i - 1][j] + 1,
-          matrix[i][j - 1] + 1,
-          matrix[i - 1][j - 1] + 1
-        );
-      }
-    }
-  }
-  return matrix[bLen][aLen];
-}
-
-function findClosestCandidates(parsed, dataset) {
-  const nameKey = parsed.streetBase || parsed.streetNormalized;
-  if (!nameKey) {
-    return [];
+  function hide(el) {
+    if (!el) return;
+    el.hidden = true;
   }
 
-  const filtered = dataset.filter((row) => {
-    if (row.streetNumber) {
-      return String(parsed.number) === row.streetNumber;
-    }
-    return isRangeMatch(row, parsed.number);
-  });
-
-  if (!filtered.length) {
-    return [];
-  }
-
-  const unique = uniqueCandidatesByStreet(filtered);
-  let bestDistance = Number.POSITIVE_INFINITY;
-  const best = [];
-
-  unique.forEach((row) => {
-    const compareKey = row.streetBase || row.streetName;
-    const distance = levenshteinDistance(nameKey, compareKey);
-    if (distance < bestDistance) {
-      bestDistance = distance;
-      best.length = 0;
-      best.push(row);
-    } else if (distance === bestDistance) {
-      best.push(row);
-    }
-  });
-
-  const maxLen = Math.max(nameKey.length, 1);
-  const threshold = Math.max(2, Math.round(maxLen * 0.3));
-  if (bestDistance > threshold) {
-    return [];
-  }
-  return best;
-}
-
-const COUNCILOR_BY_DISTRICT = {
-  "1": "Marty Nave",
-  "2": "Donna Moore",
-  "3": "Corey Williams",
-  "4": "Patrona Jones-Rowser",
-  "5": "Jimmy Monto",
-};
-
-function getCouncilorName(district) {
-  return COUNCILOR_BY_DISTRICT[district] || "";
-}
-
-function toWholeNumber(value) {
-  if (value == null) return "";
-  const s = String(value).trim();
-  const m = s.match(/\d+/);
-  return m ? m[0] : "";
-}
-
-async function loadStreetData() {
-  if (dataLoaded) {
-    return;
-  }
-
-  const embeddedPrimary = window.STREET_DATA_V2;
-  const embeddedBackup =
-    window.STREET_DATA ?? (typeof STREET_DATA !== "undefined" ? STREET_DATA : null);
-
-  if (Array.isArray(embeddedPrimary)) {
-    streetData = buildDataset(embeddedPrimary);
-    dataLoaded = true;
-  }
-
-  if (Array.isArray(embeddedBackup)) {
-    streetDataBackup = buildDataset(embeddedBackup);
-    dataLoaded = true;
-  }
-
-  if (dataLoaded) {
-    dataLoaded = true;
-    return;
-  }
-
-  const response = await fetch("street_data.csv");
-  if (!response.ok) {
-    throw new Error("Unable to load street_data.csv");
-  }
-
-  const text = await response.text();
-  const rows = parseCsv(text);
-  const headers = rows.shift();
-  const index = Object.fromEntries(headers.map((header, i) => [header, i]));
-
-  streetData = rows
-    .map((row) => {
-      const streetName = normalizeStreetName(row[index["Street Name"]] || "");
-      const baseName = baseStreetName(streetName.split(" "));
-      return {
-        numFrom: Number.parseInt(row[index["Num From"]], 10),
-        numTo: Number.parseInt(row[index["Num To"]], 10),
-        rangeType: row[index["Range Type"]] || "",
-        streetName,
-        streetBase: baseName,
-        ward: row[index["Ward"]] || "",
-        cityCouncil: row[index["City Council"]] || "",
-        streetNumber: null,
-      };
-    })
-    .filter((row) => row.streetName);
-
-  dataLoaded = true;
-}
-
-function clearOutput() {
-  if (results) {
-    results.innerHTML = "";
-  }
-}
-
-function addLine(html) {
-  if (!results) return;
-  const div = document.createElement("div");
-  div.className = "result";
-  div.innerHTML = html;
-  results.appendChild(div);
-}
-
-function handleSearch() {
-  const term = (input?.value || "").trim();
-  clearOutput();
-
-  if (!term) {
-    addLine("<strong>Type an address</strong> (example: <em>201 E Jefferson St</em>).");
-    return;
-  }
-
-  loadStreetData()
-    .then(() => {
-      const parsed = parseAddress(term);
-      if (!parsed) {
-        addLine(
-          "<strong>Please include a house number</strong> (example: <em>201 E Jefferson St</em>)."
-        );
-        return;
-      }
-
-      const primaryCandidates = streetData.length ? findCandidates(parsed, streetData) : [];
-      const backupCandidates = primaryCandidates.length
-        ? primaryCandidates
-        : (streetDataBackup.length ? findCandidates(parsed, streetDataBackup) : []);
-      const candidates = uniqueCandidatesByStreet(backupCandidates);
-
-      if (!candidates.length) {
-        const combined = streetData.concat(streetDataBackup);
-        const close = findClosestCandidates(parsed, combined);
-        if (close.length) {
-          addLine("<strong>No exact match.</strong> Did you mean:");
-          close.forEach((row) => {
-            addLine(`• ${titleCase(row.streetName)} (District ${toWholeNumber(row.cityCouncil)})`);
-          });
-          return;
-        }
-        addLine("<strong>No match found</strong> for that address.");
-        return;
-      }
-
-      candidates.forEach((row) => {
-        const districtNum = toWholeNumber(row.cityCouncil).replace(/^0+/, "");
-        const wardNum = toWholeNumber(row.ward).replace(/^0+/, "");
-        const councilor = getCouncilorName(districtNum);
-        addLine(
-          `<strong>${parsed.number} ${titleCase(row.streetName)}</strong><br/>District <strong>${districtNum}</strong>, Ward <strong>${wardNum}</strong><br/>Councilor: <strong>${councilor}</strong>`
-        );
-      });
-    })
-    .catch(() => {
-      addLine("<strong>Couldn’t load district data.</strong> Please try again.");
-    });
-}
-
-if (searchButton) {
-  searchButton.addEventListener("click", handleSearch);
-}
-
-if (input) {
-  input.addEventListener("keydown", (event) => {
-    if (event.key === "Enter") {
-      handleSearch();
-    }
-  });
-}
-
-// UI helpers + live search
-function setCurrentDate() {
-  const el = document.getElementById("current-date");
-  if (!el) return;
-  const today = new Date();
-  el.textContent = today
-    .toLocaleDateString("en-US", { month: "long", day: "numeric" })
-    .toUpperCase();
-}
-
-function show(el) {
-  if (!el) return;
-  el.style.display = "";
-}
-
-function hide(el) {
-  if (!el) return;
-  el.style.display = "none";
-}
-
-function clearMessages() {
-  if (suggestionMessage) {
-    suggestionMessage.textContent = "";
-    hide(suggestionMessage);
-  }
-  if (noResults) {
-    noResults.textContent = "";
-    hide(noResults);
-  }
-  if (loadError) {
-    loadError.textContent = "";
-    hide(loadError);
-  }
-}
-
-function clearTable() {
-  if (resultsBody) resultsBody.innerHTML = "";
-}
-
-function clearSpotlight() {
-  if (!spotlight) return;
-  if (spotlightDistrict) spotlightDistrict.textContent = "";
-  if (spotlightWard) spotlightWard.textContent = "";
-  if (spotlightAddress) spotlightAddress.textContent = "";
-  if (spotlightCouncilor) spotlightCouncilor.textContent = "";
-  hide(spotlight);
-}
-
-function showSpotlight(match, parsed) {
-  if (!spotlight || !match) return;
-
-  const districtNum = toWholeNumber(match.cityCouncil).replace(/^0+/, "");
-  const wardNum = toWholeNumber(match.ward).replace(/^0+/, "");
-  const councilorName = getCouncilorName(districtNum) || "";
-
-  const streetDisplay = titleCase(match.streetName || parsed?.streetNormalized || "");
-  const addressDisplay = `${parsed?.number || ""} ${streetDisplay}`.trim();
-
-  if (spotlightDistrict) {
-    spotlightDistrict.textContent = districtNum ? `DISTRICT ${districtNum}` : "DISTRICT";
-  }
-  if (spotlightWard) {
-    spotlightWard.textContent = wardNum || "";
-  }
-  if (spotlightAddress) {
-    spotlightAddress.textContent = addressDisplay;
-  }
-  if (spotlightCouncilor) {
-    spotlightCouncilor.textContent = councilorName || "";
-  }
-
-  show(spotlight);
-}
-
-function formatRangeAddress(row) {
- 
-  let numberPart = "";
-  if (row.streetNumber) {
-    numberPart = row.streetNumber;
-  } else if (
-    row.numFrom !== null &&
-    row.numTo !== null &&
-    !Number.isNaN(row.numFrom) &&
-    !Number.isNaN(row.numTo)
-  ) {
-    numberPart = row.numFrom === row.numTo ? String(row.numFrom) : `${row.numFrom}-${row.numTo}`;
-  }
-
-  if (
-    !row.streetNumber &&
-    row.rangeType &&
-    String(row.rangeType).trim() &&
-    String(row.rangeType).toLowerCase() !== "all"
-  ) {
-    const t = String(row.rangeType).trim();
-    numberPart += ` (${t.charAt(0).toUpperCase()}${t.slice(1).toLowerCase()})`;
-  }
-
-  const street = titleCase(row.streetName || "");
-  return `${numberPart} ${street}`.trim();
-}
-
-function renderTableV4(rows, parsed = null, opts = {}) {
-  const { isSuggestion = false } = opts;
-
-  clearTable();
-  clearMessages();
-  clearSpotlight();
-
-  if (!rows || !rows.length) {
-    if (noResults) {
-      noResults.textContent = parsed ? "No matches found for that address." : "Start typing an address to see results.";
-      show(noResults);
-    }
-    return;
-  }
-
-  // Suggestion banner
-  if (isSuggestion || (parsed && rows.length > 1)) {
-    if (suggestionMessage) {
-      suggestionMessage.textContent = isSuggestion
-        ? "No exact match. Did you mean one of these?"
-        : "Multiple matches found. Check the address/range that matches your location.";
-      show(suggestionMessage);
-    }
-  }
-
-  if (parsed && rows.length === 1) {
-    showSpotlight(rows[0], parsed);
-  }
-
-  // Populate table
-  if (!resultsBody) return;
-  rows.forEach((row) => {
-    const districtNum = toWholeNumber(row.cityCouncil).replace(/^0+/, "");
-    const wardNum = toWholeNumber(row.ward).replace(/^0+/, "");
-    const councilorName = getCouncilorName(districtNum) || "";
-    const addressStr = formatRangeAddress(row);
-
-    const tr = document.createElement("tr");
-    tr.innerHTML = `<td>${addressStr}</td><td>${districtNum || ""}</td><td>${wardNum || ""}</td><td>${councilorName || ""}</td>`;
-    resultsBody.appendChild(tr);
-  });
-}
-
-// street suggestions
-let __V4_INDEX_BUILT__ = false;
-let __V4_STREETS__ = [];
-let __V4_ACTIVE_INDEX__ = -1;
-
-function buildTypeaheadIndex() {
-  if (__V4_INDEX_BUILT__) return;
-  const combined = streetData.concat(streetDataBackup);
-  const seen = new Set();
-  const out = [];
-  combined.forEach((row) => {
-    const name = titleCase(row.streetName || "").trim();
-    if (!name) return;
-    if (seen.has(name)) return;
-    seen.add(name);
-    out.push(name);
-  });
-  out.sort((a, b) => a.localeCompare(b));
-  __V4_STREETS__ = out;
-  __V4_INDEX_BUILT__ = true;
-}
-
-function closeTypeahead() {
-  if (!typeahead) return;
-  typeahead.innerHTML = "";
-  hide(typeahead);
-  __V4_ACTIVE_INDEX__ = -1;
-}
-
-function openTypeahead(items, onPick) {
-  if (!typeahead) return;
-  if (!items.length) {
-    closeTypeahead();
-    return;
-  }
-  typeahead.innerHTML = items
-    .map((t, idx) => `<div class="typeahead-item" data-idx="${idx}">${t}</div>`)
-    .join("");
-  show(typeahead);
-  __V4_ACTIVE_INDEX__ = -1;
-
-  // Click handling
-  Array.from(typeahead.querySelectorAll(".typeahead-item")).forEach((el) => {
-    el.addEventListener("mousedown", (e) => {
-    
-      e.preventDefault();
-      const text = el.textContent || "";
-      onPick(text);
-      closeTypeahead();
-    });
-  });
-}
-
-function setActiveTypeaheadIndex(nextIndex) {
-  if (!typeahead) return;
-  const items = Array.from(typeahead.querySelectorAll(".typeahead-item"));
-  items.forEach((el) => el.classList.remove("active"));
-  if (nextIndex >= 0 && nextIndex < items.length) {
-    items[nextIndex].classList.add("active");
-    __V4_ACTIVE_INDEX__ = nextIndex;
-  
-    items[nextIndex].scrollIntoView({ block: "nearest" });
-  }
-}
-
-function getStreetSearchTerm(raw) {
-  const t = (raw || "").trim();
-  if (!t) return "";
-
-  const m = t.match(/^(\d+)\s+(.*)$/);
-  if (m) return m[2].trim();
-  return t;
-}
-
-function computeStreetSuggestions(term, max = 8) {
-  const s = normalizeStreetName(getStreetSearchTerm(term));
-  if (!s || s.length < 2) return [];
-
-  const sLower = s.toLowerCase();
-  const out = [];
-  for (let i = 0; i < __V4_STREETS__.length; i += 1) {
-    const street = __V4_STREETS__[i];
-    const n = normalizeStreetName(street);
-    if (n.startsWith(sLower) || n.includes(` ${sLower}`)) {
-      out.push(street);
-      if (out.length >= max) break;
-    }
-  }
-  return out;
-}
-
-function debounce(fn, wait = 120) {
-  let t = null;
-  return (...args) => {
-    if (t) window.clearTimeout(t);
-    t = window.setTimeout(() => fn(...args), wait);
-  };
-}
-
-// Live search 
-async function doSearchV4() {
-  const term = (v4Input?.value || "").trim();
-
-  clearMessages();
-  clearSpotlight();
-
-  if (input && v4Input && input !== v4Input) {
-    input.value = term;
-  }
-
-  if (!term) {
-    clearTable();
-    closeTypeahead();
-    return;
-  }
-
-  try {
-    await loadStreetData();
-  } catch (e) {
-    clearTable();
-    closeTypeahead();
-    if (loadError) {
-      loadError.textContent = "Couldn’t load district data. Please try again.";
-      show(loadError);
-    }
-    return;
-  }
-
-  buildTypeaheadIndex();
-
-  const suggestions = computeStreetSuggestions(term);
-  openTypeahead(suggestions, (picked) => {
-    const m = term.match(/^(\d+)\s+/);
-    v4Input.value = m ? `${m[1]} ${picked}` : picked;
-    doSearchV4();
-  });
-
-  const parsed = parseAddress(term);
-  if (!parsed) {
-    const normalizedTerm = normalizeStreetName(getStreetSearchTerm(term));
-    const combined = streetDataBackup.concat(streetData);
-    const matches = combined
-      .filter((row) => (row.streetName || "").includes(normalizedTerm) || (row.streetBase || "").includes(normalizedTerm))
-      .slice(0, 50);
-    renderTableV4(uniqueCandidatesByStreet(matches));
-    return;
-  }
-
-  // Find matches - address dataset preferred; then ranges
-  const primaryCandidates = streetData.length ? findCandidates(parsed, streetData) : [];
-  const backupCandidates = primaryCandidates.length
-    ? primaryCandidates
-    : (streetDataBackup.length ? findCandidates(parsed, streetDataBackup) : []);
-  const candidates = uniqueCandidatesByStreet(backupCandidates);
-
-  if (!candidates.length) {
-    const combined = streetData.concat(streetDataBackup);
-    const closeCandidates = findClosestCandidates(parsed, combined);
-    if (closeCandidates.length) {
-      renderTableV4(closeCandidates, parsed, { isSuggestion: true });
+  function setBanner(el, text, isError = false) {
+    if (!el) return;
+
+    if (!text) {
+      el.textContent = "";
+      el.classList.remove("error");
+      hide(el);
       return;
     }
-    renderTableV4([], parsed);
-    if (noResults) {
-      noResults.textContent = `No results found for "${term}".`;
-      show(noResults);
-    }
-    return;
+
+    el.textContent = text;
+    el.classList.toggle("error", !!isError);
+    show(el);
   }
 
-  renderTableV4(candidates, parsed, { isSuggestion: candidates.length > 1 });
-}
+  function clearTable() {
+    if (resultsBody) resultsBody.innerHTML = "";
+  }
 
-const doSearchV4Debounced = debounce(doSearchV4, 120);
+  function hideAllBanners() {
+    setBanner(suggestionMessage, "");
+    setBanner(noResults, "");
+    setBanner(loadError, "");
+  }
 
-function attachV4Handlers() {
-  if (!v4Input) return;
+  function showResultsSection() {
+    if (resultsSection) show(resultsSection);
+  }
 
-  // Live search
-  v4Input.addEventListener("input", () => doSearchV4Debounced());
+  function hideResultsSection() {
+    if (resultsSection) hide(resultsSection);
+  }
 
-  v4Input.addEventListener("keydown", (e) => {
-    if (!typeahead || typeahead.style.display === "none") return;
-    const items = Array.from(typeahead.querySelectorAll(".typeahead-item"));
-    if (!items.length) return;
+  function hideSpotlight() {
+    if (!spotlight) return;
 
-    if (e.key === "ArrowDown") {
-      e.preventDefault();
-      const next = Math.min(__V4_ACTIVE_INDEX__ + 1, items.length - 1);
-      setActiveTypeaheadIndex(next);
-    } else if (e.key === "ArrowUp") {
-      e.preventDefault();
-      const next = Math.max(__V4_ACTIVE_INDEX__ - 1, 0);
-      setActiveTypeaheadIndex(next);
-    } else if (e.key === "Enter") {
-      if (__V4_ACTIVE_INDEX__ >= 0 && __V4_ACTIVE_INDEX__ < items.length) {
-        e.preventDefault();
-        const picked = items[__V4_ACTIVE_INDEX__].textContent || "";
-        const term = (v4Input.value || "").trim();
-        const m = term.match(/^(\d+)\s+/);
-        v4Input.value = m ? `${m[1]} ${picked}` : picked;
-        closeTypeahead();
-        doSearchV4();
+    if (spotlightDistrict) spotlightDistrict.textContent = "";
+    if (spotlightWard) spotlightWard.textContent = "";
+    if (spotlightAddress) spotlightAddress.textContent = "";
+    if (spotlightTitleName) spotlightTitleName.textContent = "";
+
+    if (spotlightContactLink) {
+      spotlightContactLink.href =
+        "https://www.syr.gov/Departments/Common-Council/Councilors";
+      spotlightContactLink.textContent = "Contact";
+      spotlightContactLink.style.display = "none";
+    }
+
+    hide(spotlight);
+  }
+
+  const TOKEN_MAP = {
+    st: "street",
+    street: "street",
+    rd: "road",
+    road: "road",
+    ave: "avenue",
+    avenue: "avenue",
+    av: "avenue",
+    aven: "avenue",
+    blvd: "boulevard",
+    boulevard: "boulevard",
+    dr: "drive",
+    drive: "drive",
+    ln: "lane",
+    lane: "lane",
+    ct: "court",
+    court: "court",
+    pl: "place",
+    place: "place",
+    ter: "terrace",
+    terrace: "terrace",
+    terr: "terrace",
+    pkwy: "parkway",
+    parkway: "parkway",
+    hwy: "highway",
+    highway: "highway",
+    cir: "circle",
+    circle: "circle",
+    sq: "square",
+    square: "square",
+    way: "way",
+    n: "north",
+    north: "north",
+    s: "south",
+    south: "south",
+    e: "east",
+    east: "east",
+    w: "west",
+    west: "west",
+    ne: "northeast",
+    northeast: "northeast",
+    nw: "northwest",
+    northwest: "northwest",
+    se: "southeast",
+    southeast: "southeast",
+    sw: "southwest",
+    southwest: "southwest",
+  };
+
+  const ORDINAL_MAP = {
+    "1st": "first",
+    "2nd": "second",
+    "3rd": "third",
+    "4th": "fourth",
+    "5th": "fifth",
+    "6th": "sixth",
+    "7th": "seventh",
+    "8th": "eighth",
+    "9th": "ninth",
+    "10th": "tenth",
+    "11th": "eleventh",
+    "12th": "twelfth",
+    "13th": "thirteenth",
+    "14th": "fourteenth",
+    "15th": "fifteenth",
+    "16th": "sixteenth",
+    "17th": "seventeenth",
+    "18th": "eighteenth",
+    "19th": "nineteenth",
+    "20th": "twentieth",
+  };
+
+  const STREET_TYPES = new Set([
+    "street",
+    "road",
+    "avenue",
+    "boulevard",
+    "drive",
+    "lane",
+    "court",
+    "place",
+    "terrace",
+    "parkway",
+    "highway",
+    "circle",
+    "square",
+    "way",
+  ]);
+
+  const DISPLAY_ABBR = {
+    street: "St",
+    road: "Rd",
+    avenue: "Ave",
+    boulevard: "Blvd",
+    drive: "Dr",
+    lane: "Ln",
+    court: "Ct",
+    place: "Pl",
+    terrace: "Ter",
+    parkway: "Pkwy",
+    highway: "Hwy",
+    circle: "Cir",
+    square: "Sq",
+    north: "N",
+    south: "S",
+    east: "E",
+    west: "W",
+    northeast: "NE",
+    northwest: "NW",
+    southeast: "SE",
+    southwest: "SW",
+  };
+
+  function normalizeOrdinal(token) {
+    if (ORDINAL_MAP[token]) return ORDINAL_MAP[token];
+    return token.replace(/(\d+)(st|nd|rd|th)$/, (_, num) => {
+      return ORDINAL_MAP[`${num}th`] || num;
+    });
+  }
+
+  function normalizeTokens(value) {
+    return String(value || "")
+      .toLowerCase()
+      .replace(/[.,]/g, "")
+      .replace(/[^\w\s]/g, " ")
+      .split(/\s+/)
+      .filter(Boolean)
+      .map((t) => normalizeOrdinal(TOKEN_MAP[t] || t));
+  }
+
+  function normalizeStreetName(value) {
+    return normalizeTokens(value).join(" ").trim();
+  }
+
+  function baseStreetName(tokens) {
+    if (!tokens.length) return "";
+    const last = tokens[tokens.length - 1];
+    if (STREET_TYPES.has(last)) return tokens.slice(0, -1).join(" ").trim();
+    return tokens.join(" ").trim();
+  }
+
+  function titleCaseStreetFromNormalized(streetNorm) {
+    const tokens = String(streetNorm || "")
+      .split(/\s+/)
+      .filter(Boolean);
+
+    return tokens
+      .map((t) => {
+        const lower = t.toLowerCase();
+        if (DISPLAY_ABBR[lower]) return DISPLAY_ABBR[lower];
+        return lower.charAt(0).toUpperCase() + lower.slice(1);
+      })
+      .join(" ");
+  }
+
+  function toWholeNumber(value) {
+    if (value == null) return "";
+    const s = String(value).trim();
+    const m = s.match(/\d+/);
+    return m ? m[0] : "";
+  }
+
+  function cleanDistrict(value) {
+    return toWholeNumber(value).replace(/^0+/, "") || "";
+  }
+
+  function cleanWard(value) {
+    return toWholeNumber(value).replace(/^0+/, "") || "";
+  }
+
+  function parseNumberFirst(raw) {
+    const t = String(raw || "").trim();
+    if (!t) return null;
+
+    const m = t.match(/^(\d+)\s*(.*)$/);
+    if (!m) return null;
+
+    const number = Number.parseInt(m[1], 10);
+    const restRaw = String(m[2] || "")
+      .replace(/\b(apt|unit|suite|#)\b.*$/i, "")
+      .trim();
+
+    const tokens = normalizeTokens(restRaw);
+    const streetNormalized = tokens.join(" ").trim();
+    const streetBase = baseStreetName(tokens);
+    const hasTypeToken = tokens.length
+      ? STREET_TYPES.has(tokens[tokens.length - 1])
+      : false;
+
+    return {
+      number,
+      streetRaw: restRaw,
+      streetNormalized,
+      streetBase,
+      hasTypeToken,
+      hasStreet: !!streetNormalized,
+    };
+  }
+
+  function parseStreetOnly(raw) {
+    const t = String(raw || "").trim();
+    if (!t) return null;
+
+    const tokens = normalizeTokens(t);
+    const streetNormalized = tokens.join(" ").trim();
+    if (!streetNormalized) return null;
+
+    const streetBase = baseStreetName(tokens);
+    const hasTypeToken = tokens.length
+      ? STREET_TYPES.has(tokens[tokens.length - 1])
+      : false;
+
+    return {
+      streetRaw: t,
+      streetNormalized,
+      streetBase,
+      hasTypeToken,
+    };
+  }
+
+  let dataLoaded = false;
+  let rangeRows = [];
+  let exactRows = [];
+
+  function matchesOddEven(addressNumber, rangeType) {
+    const t = String(rangeType || "").toLowerCase().trim();
+    if (t === "o" || t.includes("odd")) return addressNumber % 2 === 1;
+    if (t === "e" || t.includes("even")) return addressNumber % 2 === 0;
+    return true;
+  }
+
+  function parseNumberSpec(rawSpec) {
+    const s = String(rawSpec || "").trim();
+    if (!s) return null;
+
+    const firstNum = s.match(/^(\d+)/);
+    if (!firstNum) return null;
+
+    const startStr = firstNum[1];
+    const dash = s.match(/^(\d+)\s*-\s*([0-9]+)\b/);
+
+    if (!dash) {
+      const n = Number.parseInt(startStr, 10);
+      return Number.isNaN(n) ? null : { start: n, end: n };
+    }
+
+    const start = Number.parseInt(dash[1], 10);
+    let endStr = dash[2];
+
+    if (endStr.length < dash[1].length) {
+      const prefix = dash[1].slice(0, dash[1].length - endStr.length);
+      endStr = `${prefix}${endStr}`;
+    }
+
+    const end = Number.parseInt(endStr, 10);
+    if (Number.isNaN(start) || Number.isNaN(end)) return null;
+
+    return { start: Math.min(start, end), end: Math.max(start, end) };
+  }
+
+  function loadData() {
+    if (dataLoaded) return true;
+
+    const rawRanges = window.STREET_DATA;
+    const rawExact = window.STREET_DATA_V2;
+
+    if (!Array.isArray(rawRanges)) {
+      setBanner(
+        loadError,
+        "Data could not be loaded....",
+        true
+      );
+      showResultsSection();
+      dataLoaded = false;
+      return false;
+    }
+
+    rangeRows = rawRanges
+      .map((row) => {
+        const numFrom = Number.parseInt(row[0], 10);
+        const numTo = Number.parseInt(row[1], 10);
+        const rangeType = String(row[2] || "").trim();
+        const streetRaw = String(row[3] || "").trim();
+
+        const ward = cleanWard(row[4]);
+        const district = cleanDistrict(row[5]);
+
+        const streetNorm = normalizeStreetName(streetRaw);
+        const streetBase = baseStreetName(streetNorm.split(" "));
+
+        if (!streetNorm) return null;
+        if (Number.isNaN(numFrom) || Number.isNaN(numTo)) return null;
+
+        return {
+          kind: "range",
+          numFrom,
+          numTo,
+          rangeType,
+          streetNorm,
+          streetBase,
+          ward,
+          district,
+        };
+      })
+      .filter(Boolean);
+
+    exactRows = Array.isArray(rawExact)
+      ? rawExact
+          .map((row) => {
+            const spec = String(row[0] || "").trim();
+            const streetRaw = String(row[1] || "").trim();
+            const district = cleanDistrict(row[2]);
+            const ward = cleanWard(row[3]);
+
+            const numberSpec = parseNumberSpec(spec);
+            if (!numberSpec) return null;
+
+            const streetNorm = normalizeStreetName(streetRaw);
+            const streetBase = baseStreetName(streetNorm.split(" "));
+
+            if (!streetNorm) return null;
+
+            return {
+              kind: "exact",
+              numberSpec,
+              streetNorm,
+              streetBase,
+              ward,
+              district,
+            };
+          })
+          .filter(Boolean)
+      : [];
+
+    dataLoaded = true;
+    setBanner(loadError, "");
+    return true;
+  }
+
+  function rangeRowMatchesNumber(row, n) {
+    if (n < row.numFrom || n > row.numTo) return false;
+    return matchesOddEven(n, row.rangeType);
+  }
+
+  function exactRowMatchesNumber(row, n) {
+    return n >= row.numberSpec.start && n <= row.numberSpec.end;
+  }
+
+  function streetMatchesRow(streetQuery, row) {
+    if (!streetQuery || !row) return false;
+
+    if (streetQuery.hasTypeToken) {
+      return streetQuery.streetNormalized === row.streetNorm;
+    }
+
+    if (streetQuery.streetBase) {
+      return streetQuery.streetBase === row.streetBase;
+    }
+
+    return false;
+  }
+
+  function dedupe(rows) {
+    const out = [];
+    const seen = new Set();
+
+    for (const r of rows) {
+      const k = `${r.streetNorm}|${r.district}|${r.ward}`;
+      if (seen.has(k)) continue;
+      seen.add(k);
+      out.push(r);
+    }
+
+    return out;
+  }
+
+  function findDirectCandidates(parsed) {
+    const rangeHits = rangeRows.filter(
+      (r) =>
+        rangeRowMatchesNumber(r, parsed.number) && streetMatchesRow(parsed, r)
+    );
+    if (rangeHits.length) return dedupe(rangeHits);
+
+    const exactHits = exactRows.filter(
+      (r) =>
+        exactRowMatchesNumber(r, parsed.number) && streetMatchesRow(parsed, r)
+    );
+    return dedupe(exactHits);
+  }
+
+  function computeNumberSuggestions(parsed, limit = 200) {
+    const n = parsed.number;
+
+    const fragNorm = normalizeStreetName(parsed.streetRaw || "");
+    const fragTokens = fragNorm.split(/\s+/).filter(Boolean);
+    const fragBase = baseStreetName(fragTokens);
+
+    const hits = [];
+
+    for (const r of rangeRows) {
+      if (!rangeRowMatchesNumber(r, n)) continue;
+
+      if (fragNorm) {
+        const ok =
+          r.streetNorm.startsWith(fragNorm) ||
+          r.streetNorm.includes(fragNorm) ||
+          (fragBase &&
+            (r.streetBase === fragBase || r.streetBase.includes(fragBase)));
+
+        if (!ok) continue;
       }
-    } else if (e.key === "Escape") {
-      closeTypeahead();
+
+      hits.push(r);
+      if (hits.length >= limit) break;
+    }
+
+    const unique = dedupe(hits);
+    unique.sort((a, b) =>
+      titleCaseStreetFromNormalized(a.streetNorm).localeCompare(
+        titleCaseStreetFromNormalized(b.streetNorm)
+      )
+    );
+
+    return unique;
+  }
+
+  function computeStreetOnlySuggestions(streetQuery, limit = 200) {
+    const fragNorm = normalizeStreetName(streetQuery.streetRaw || "");
+    const fragTokens = fragNorm.split(/\s+/).filter(Boolean);
+    const fragBase = baseStreetName(fragTokens);
+
+    const hits = [];
+
+    for (const r of rangeRows) {
+      if (!fragNorm) continue;
+
+      const ok =
+        r.streetNorm.startsWith(fragNorm) ||
+        r.streetNorm.includes(fragNorm) ||
+        (fragBase &&
+          (r.streetBase === fragBase || r.streetBase.includes(fragBase)));
+
+      if (!ok) continue;
+
+      hits.push(r);
+      if (hits.length >= limit) break;
+    }
+
+    const unique = dedupe(hits);
+    unique.sort((a, b) =>
+      titleCaseStreetFromNormalized(a.streetNorm).localeCompare(
+        titleCaseStreetFromNormalized(b.streetNorm)
+      )
+    );
+
+    return unique;
+  }
+
+  function formatAddress(number, row) {
+    return `${number} ${titleCaseStreetFromNormalized(row.streetNorm || "")}`.trim();
+  }
+
+  function formatStreetOnly(row) {
+    return titleCaseStreetFromNormalized(row.streetNorm || "");
+  }
+
+  function renderSpotlight(row, number) {
+    hideAllBanners();
+    hideResultsSection();
+    clearTable();
+
+    const districtNum = cleanDistrict(row.district);
+    const wardNum = cleanWard(row.ward);
+
+    if (spotlightDistrict) spotlightDistrict.textContent = districtNum || "—";
+    if (spotlightWard) spotlightWard.textContent = wardNum || "—";
+    if (spotlightAddress) spotlightAddress.textContent = formatAddress(number, row);
+
+    const meta = getCouncilorMeta(districtNum);
+    const councilorName = meta.name || "Common Council";
+    const councilorUrl =
+      meta.url || "https://www.syr.gov/Departments/Common-Council/Councilors";
+
+    if (spotlightTitleName) spotlightTitleName.textContent = councilorName;
+
+    if (spotlightContactLink) {
+      spotlightContactLink.href = councilorUrl;
+      spotlightContactLink.textContent = `Contact ${councilorName}`;
+      spotlightContactLink.style.display = "inline-flex";
+    }
+
+    show(spotlight);
+  }
+
+  function renderTableSelect(rows, number, bannerText) {
+    hideSpotlight();
+    hideAllBanners();
+    clearTable();
+
+    setBanner(suggestionMessage, bannerText || "");
+
+    if (!rows || !rows.length) {
+      hideResultsSection();
+      return;
+    }
+
+    for (const row of rows) {
+      const districtNum = cleanDistrict(row.district);
+      const wardNum = cleanWard(row.ward);
+      const meta = getCouncilorMeta(districtNum);
+      const councilorName = meta.name || "—";
+
+      const tr = document.createElement("tr");
+      tr.tabIndex = 0;
+
+      const addrTd = document.createElement("td");
+      addrTd.textContent = formatAddress(number, row);
+
+      const distTd = document.createElement("td");
+      distTd.textContent = districtNum || "";
+
+      const wardTd = document.createElement("td");
+      wardTd.textContent = wardNum || "";
+
+      const councilTd = document.createElement("td");
+      councilTd.innerHTML = meta.url
+        ? `<a class="councilor-link" href="${meta.url}" target="_blank" rel="noopener">${councilorName}</a>`
+        : councilorName;
+
+      tr.appendChild(addrTd);
+      tr.appendChild(distTd);
+      tr.appendChild(wardTd);
+      tr.appendChild(councilTd);
+
+      const pick = () => {
+        const streetDisplay = titleCaseStreetFromNormalized(row.streetNorm || "");
+        input.value = `${number} ${streetDisplay}`.trim();
+        renderSpotlight(row, number);
+      };
+
+      tr.addEventListener("click", pick);
+      tr.addEventListener("keydown", (e) => {
+        if (e.key === "Enter") {
+          e.preventDefault();
+          pick();
+        }
+      });
+
+      resultsBody.appendChild(tr);
+    }
+
+    showResultsSection();
+  }
+
+  function renderTableBrowse(rows, bannerText) {
+    hideSpotlight();
+    hideAllBanners();
+    clearTable();
+
+    setBanner(suggestionMessage, bannerText || "");
+
+    if (!rows || !rows.length) {
+      hideResultsSection();
+      return;
+    }
+
+    for (const row of rows) {
+      const districtNum = cleanDistrict(row.district);
+      const wardNum = cleanWard(row.ward);
+      const meta = getCouncilorMeta(districtNum);
+      const councilorName = meta.name || "—";
+
+      const tr = document.createElement("tr");
+
+      const addrTd = document.createElement("td");
+      addrTd.textContent = formatStreetOnly(row);
+
+      const distTd = document.createElement("td");
+      distTd.textContent = districtNum || "";
+
+      const wardTd = document.createElement("td");
+      wardTd.textContent = wardNum || "";
+
+      const councilTd = document.createElement("td");
+      councilTd.innerHTML = meta.url
+        ? `<a class="councilor-link" href="${meta.url}" target="_blank" rel="noopener">${councilorName}</a>`
+        : councilorName;
+
+      tr.appendChild(addrTd);
+      tr.appendChild(distTd);
+      tr.appendChild(wardTd);
+      tr.appendChild(councilTd);
+
+      resultsBody.appendChild(tr);
+    }
+
+    showResultsSection();
+  }
+
+  function updateUI() {
+    const term = String(input.value || "").trim();
+
+    hideAllBanners();
+    hideSpotlight();
+    clearTable();
+
+    if (!term) {
+      hideResultsSection();
+      return;
+    }
+
+    if (!loadData()) return;
+
+    const parsed = parseNumberFirst(term);
+
+    if (parsed) {
+      if (!parsed.hasStreet) {
+        const rows = computeNumberSuggestions(parsed, 200);
+        if (rows.length) {
+          renderTableSelect(
+            rows,
+            parsed.number,
+            "Keep typing the street name to narrow the list."
+          );
+          return;
+        }
+
+        hideResultsSection();
+        setBanner(noResults, "No matches found. Check the address and try again.", true);
+        showResultsSection();
+        return;
+      }
+
+      const direct = findDirectCandidates(parsed);
+
+      if (direct.length === 1) {
+        renderSpotlight(direct[0], parsed.number);
+        return;
+      }
+
+      if (direct.length > 1) {
+        renderTableSelect(
+          direct,
+          parsed.number,
+          "Select your address from the list."
+        );
+        return;
+      }
+
+      if ((parsed.streetRaw || "").trim().length < 2) {
+        hideResultsSection();
+        setBanner(suggestionMessage, "Keep typing the street name to see matches.");
+        showResultsSection();
+        return;
+      }
+
+      const suggestions = computeNumberSuggestions(parsed, 200);
+      if (suggestions.length) {
+        renderTableSelect(
+          suggestions,
+          parsed.number,
+          "Select your address from the list."
+        );
+        return;
+      }
+
+      hideResultsSection();
+      setBanner(noResults, "No matches found. Check the address and try again.", true);
+      showResultsSection();
+      return;
+    }
+
+    const streetQuery = parseStreetOnly(term);
+    if (!streetQuery) {
+      hideResultsSection();
+      setBanner(
+        noResults,
+        "Enter a street number and street name.",
+        true
+      );
+      showResultsSection();
+      return;
+    }
+
+    const streetRows = computeStreetOnlySuggestions(streetQuery, 200);
+    if (streetRows.length) {
+      renderTableBrowse(streetRows, "Add a house number");
+      return;
+    }
+
+    hideResultsSection();
+    setBanner(noResults, "No matches found. Check the street name and try again.", true);
+    showResultsSection();
+  }
+
+  function debounce(fn, wait = 120) {
+    let t = null;
+    return (...args) => {
+      if (t) window.clearTimeout(t);
+      t = window.setTimeout(() => fn(...args), wait);
+    };
+  }
+
+  const updateUIDebounced = debounce(updateUI, 120);
+
+  input.addEventListener("input", () => updateUIDebounced());
+
+  input.addEventListener("keydown", (e) => {
+    if (e.key === "Enter") {
+      e.preventDefault();
+      updateUI();
     }
   });
 
-  // Click-away to close
-  document.addEventListener("mousedown", (e) => {
-    if (!typeahead || typeahead.style.display === "none") return;
-    const target = e.target;
-    if (target === typeahead || typeahead.contains(target) || target === v4Input) return;
-    closeTypeahead();
+  if (searchBtn) {
+    searchBtn.addEventListener("click", (e) => {
+      e.preventDefault();
+      updateUI();
+    });
+  }
+
+  document.addEventListener("DOMContentLoaded", () => {
+    hideAllBanners();
+    hideSpotlight();
+    hideResultsSection();
+    loadData();
   });
-
-  // Initial state
-  clearTable();
-}
-
-document.addEventListener("DOMContentLoaded", () => {
-  setCurrentDate();
-  attachV4Handlers();
-});
+})();
