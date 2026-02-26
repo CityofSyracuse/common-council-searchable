@@ -1,126 +1,129 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Syracuse District Lookup</title>
-    <link
-      href="https://fonts.googleapis.com/css2?family=Rubik:wght@400;700&family=Rubik+Mono+One&display=swap"
-      rel="stylesheet"
-    />
-    <link
-      href="https://stackpath.bootstrapcdn.com/bootstrap/4.5.2/css/bootstrap.min.css"
-      rel="stylesheet"
-    />
+    <title>Common Councilor Lookup</title>
     <link rel="stylesheet" href="styles.css" />
   </head>
 
   <body>
-    <div class="container">
-      <h1 class="main-heading">
-        <span class="gold">Common Councilor</span>
-        <br />
-        Lookup
-      </h1>
+    <main class="wrap">
+      <header class="hero">
+        <h1 class="title">
+          <span class="title-gold">Common Councilor</span>
+          <span class="title-break">Lookup</span>
+        </h1>
+      </header>
 
-      <p class="lead-line">
-        Enter an address to find your council district, ward, and councilor.
-      </p>
-
-      <!-- <p class="sub-line">Common Council District &amp; Ward</p> -->
-
-      <div class="info-columns" aria-label="How this tool works">
-        <div class="info-bubble">
-          <p class="bubble-title">
-            <span class="bubble-num">1)</span> Type an address
-          </p>
-          <p class="bubble-text">
-            Use a house number and street name.
-            <span class="example">Example: 201 E Jefferson St</span>
-          </p>
-        </div>
-
-        <div class="info-bubble">
-          <p class="bubble-title">
-            <span class="bubble-num">2)</span> Get your match
-          </p>
-          <p class="bubble-text">
-            Your district, ward, and councilor are shown based on your address.
-          </p>
-        </div>
-
-        <div class="info-bubble">
-          <p class="bubble-title">
-            <span class="bubble-num">3)</span> Not sure?
-          </p>
-          <p class="bubble-text">
-            Begin typing your address. We’ll suggest the closest street matches as you go.
-          </p>
-        </div>
-      </div>
-
-      <!-- Search -->
-      <div class="table-container table-responsive">
-        <div class="search-container">
-          <label class="sr-only" for="search-input">Search by address</label>
-          <input
-            id="search-input"
-            class="form-control"
-            placeholder="Start typing an address…"
-            autocomplete="off"
-            inputmode="text"
-          />
-          <div id="typeahead" class="typeahead" style="display: none"></div>
-        </div>
-
- 
-        <div id="spotlight" class="spotlight" style="display: none">
-          <div class="spotlight-left">
-            <div class="spotlight-kicker">Match</div>
-            <div class="spotlight-district">
-              <span id="spotlight-district"></span>
-              <span class="spotlight-ward">
-                <span class="sr-only">Ward</span>
-                <span id="spotlight-ward"></span>
-              </span>
+      <section class="steps-panel" aria-label="How to use this tool">
+        <div class="steps">
+          <div class="step">
+            <div class="step-num">1</div>
+            <div class="step-body">
+              <div class="step-title">Enter your address</div>
+              <div class="step-text">
+               Use your house number and street name.
+                <span class="example">201 E Jefferson St</span>
+              </div>
             </div>
-            <div id="spotlight-address" class="spotlight-address"></div>
           </div>
-          <div class="spotlight-right">
-            <div class="spotlight-kicker">Councilor</div>
-            <div id="spotlight-councilor" class="spotlight-councilor"></div>
+
+          <div class="step">
+            <div class="step-num">2</div>
+            <div class="step-body">
+              <div class="step-title">Choose your address</div>
+              <div class="step-text">Select the right street if more than one match appears.</div>
+            </div>
+          </div>
+
+          <div class="step">
+            <div class="step-num">3</div>
+            <div class="step-body">
+              <div class="step-title">View your councilor</div>
+              <div class="step-text">See your district, ward, and Common Councilor contact.</div>
+            </div>
           </div>
         </div>
+      </section>
 
-        <div id="suggestion-message" class="results-banner" style="display: none"></div>
-        <div id="no-results" class="no-results" style="display: none"></div>
-        <div id="load-error" class="load-error" style="display: none"></div>
+      <section class="search-card" aria-label="Search">
+        <label class="sr-only" for="search-input">Enter an address</label>
 
-        <table class="table table-striped mb-0">
-          <thead>
-            <tr>
-              <th>Address </th>
-              <th>District</th>
-              <th>Ward</th>
-              <th>Councilor</th>
-            </tr>
-          </thead>
-          <tbody id="results-tbody"></tbody>
-        </table>
-      </div>
+        <div class="search-row">
+          <div class="input-wrap">
+            <input
+              id="search-input"
+              type="text"
+              autocomplete="off"
+              placeholder="Enter an address "
+            />
+          </div>
 
-      <div style="display: none">
-        <input id="address" />
-        <button id="search">Search</button>
-        <div id="results"></div>
-      </div>
-    </div>
+          <button id="search-btn" class="btn btn-search" type="button">
+            Search
+          </button>
+        </div>
+      </section>
 
-    <!-- Data -->
-    <script src="data2.js"></script>
+      <section id="spotlight" class="spotlight" aria-label="Your result" hidden>
+        <div class="spotlight-card">
+          <div class="spotlight-head">
+            <div class="spotlight-title">
+              Your Common Councilor is
+              <span id="spotlight-title-name" class="spotlight-title-name"></span>
+            </div>
+            <div class="spotlight-address" id="spotlight-address"></div>
+          </div>
+
+          <div class="spotlight-chips">
+            <div class="chip">
+              <span class="chip-label">District</span>
+              <span class="chip-value" id="spotlight-district"></span>
+            </div>
+            <div class="chip">
+              <span class="chip-label">Ward</span>
+              <span class="chip-value" id="spotlight-ward"></span>
+            </div>
+          </div>
+
+          <div class="spotlight-actions">
+            <a
+              id="spotlight-contact-link"
+              class="btn btn-contact"
+              href="https://www.syr.gov/Departments/Common-Council/Councilors"
+              target="_blank"
+              rel="noopener"
+            >
+              Contact
+            </a>
+          </div>
+        </div>
+      </section>
+
+      <section id="results" class="results" aria-label="Search results" hidden>
+        <div id="suggestion-message" class="message" hidden></div>
+        <div id="no-results" class="message error" hidden></div>
+        <div id="load-error" class="message error" hidden></div>
+
+        <div class="table-wrap">
+          <table class="sc-table" aria-label="Matching council districts">
+            <thead>
+              <tr>
+                <th scope="col">Address</th>
+                <th scope="col">District</th>
+                <th scope="col">Ward</th>
+                <th scope="col">Councilor</th>
+              </tr>
+            </thead>
+            <tbody id="results-tbody"></tbody>
+          </table>
+        </div>
+      </section>
+    </main>
+
     <script src="data.js"></script>
-
-    <!-- App -->
+    <script src="data2.js"></script>
     <script src="scripts.js"></script>
   </body>
 </html>
