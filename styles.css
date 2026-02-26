@@ -31,17 +31,8 @@ body {
     Arial,
     sans-serif;
   background:
-    radial-gradient(
-      1200px 600px at 20% -10%,
-      white,
-      transparent 0%
-    ),
-    radial-gradient(
-      800px 400px at 90% 10%,
-      white,
-      transparent 0%
-    ),
-    var(--navy);
+    radial-gradient(1200px 600px at 20% -10%, white, transparent 0%),
+    radial-gradient(800px 400px at 90% 10%, white, transparent 0%), var(--navy);
   color: var(--white);
   padding-bottom: 140px;
 }
@@ -98,8 +89,16 @@ body {
   position: absolute;
   inset: 0;
   background:
-    radial-gradient(circle at 18% 24%, rgba(255, 255, 255, 0.05), transparent 45%),
-    radial-gradient(circle at 82% 72%, rgba(255, 255, 255, 0.03), transparent 50%);
+    radial-gradient(
+      circle at 18% 24%,
+      rgba(255, 255, 255, 0.05),
+      transparent 45%
+    ),
+    radial-gradient(
+      circle at 82% 72%,
+      rgba(255, 255, 255, 0.03),
+      transparent 50%
+    );
   pointer-events: none;
 }
 
@@ -129,7 +128,7 @@ body {
   font-weight: 900;
   color: var(--white);
   background: rgba(0, 49, 83, 0.24);
-  border: 1px solid #F1BE48;
+  border: 1px solid #f1be48;
 }
 
 .step-title {
@@ -142,7 +141,7 @@ body {
 .step-text {
   margin-top: 3px;
   font-size: 14px;
-  color: var(--muted);
+  color: var(--white);
   line-height: 1.25;
 }
 
@@ -183,7 +182,7 @@ body {
   width: 100%;
   height: 48px;
   border-radius: 14px;
-  border: 1px solid #F1BE48;
+  border: 1px solid #f1be48;
   background: White;
   color: black;
   padding: 0 14px;
@@ -197,11 +196,11 @@ body {
 
 #search-input:focus {
   border-color: rgba(255, 215, 0, 0.6);
-  box-shadow: 0 0 0 3px #F1BE48;
+  box-shadow: 0 0 0 3px #f1be48;
 }
 
 .btn {
-  border: 1px solid #F1BE48;
+  border: 1px solid #f1be48;
   background: linear-gradient(
     180deg,
     rgba(255, 215, 0, 0.95),
@@ -261,7 +260,7 @@ a.btn:active {
 .spotlight-card {
   border-radius: var(--radius);
   background: rgba(255, 255, 255, 0.06);
-  border: 1px solid #F1BE48;
+  border: 1px solid #f1be48;
   padding: 16px;
   box-shadow: var(--shadow);
 }
