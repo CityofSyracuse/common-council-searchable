@@ -1,131 +1,130 @@
-# Common Council District Lookup
+# gd Common Council District Lookup
 
-**Date Started:** February 2026
+This is the lookup tool on syr.gov where residents can type their address and find out who their Common Councilor is.
 
-**Last Updated:** February 2026
-
-**Initial Contributors:**
-
-* Eric Adame
-* Tim Liles
-* Mel Saffold
-
-**Current Maintainer:** Mel Saffold
-  
-**Site:** https://syr-common-councilor-lookup.netlify.app/
----
-
-## Project Summary
-
-| Info                              | Answer                                                                                           |
-| --------------------------------- | ------------------------------------------------------------------------------------------------ |
-| **Who is this for?**        | City of Syracuse residents, City staff, and public-facing web users                              |
-| **What does this tool do?** | Allows users to enter an address and identify their Common Council district, ward, and councilor |
-| **Primary Benefit**         | Removes guesswork for residents and staff when identifying council representation                |
-| **Internal Product Owner**  | Digital Services / API                                                                           |
-| **Departments Involved**    | Common Council, Digital Services                                                                 |
-| **Public-Facing**           | Yes (embedded on syr.gov pages)                                                                  |
+Live site: https://syr-common-councilor-lookup.netlify.app/
 
 ---
 
-## Overview of the Tool
+## Getting started
 
-### What This Tool Does
+ex
 
-* Accepts a street address as user input
-* Normalizes and parses address data (numbers, ordinals, abbreviations, street types)
-* Matches the address against authoritative street range and address datasets
-* Displays:
-  * Council District
-  * Ward
-  * Assigned Councilor
+**First time:**
 
-If no exact match is found, the tool suggests the closest valid matches.
+```bash
+git clone https://github.com/CityofSyracuse/common-council-searchable.git
+cd common-council-searchable
+```
 
----
+**To preview:** double-click `index.html`.
 
-## Technical Overview
+If the lookup isn't matching anything when you preview locally, your browser is blocking the JS files. Run a quick local server from the folder:
 
-### Data Sources
+```bash
+python -m http.server 8000
+```
 
-* Embedded CSV-to-JS datasets:
-  * `data.js` (street ranges)
-  * `data2.js` (exact address records, where applicable)
+Then open http://localhost:8000.
 
-> No live API dependency. All logic runs client-side.
+**Always hard-refresh after a change** — Ctrl+F5 on Windows, Cmd+Shift+R on Mac. Otherwise the browser caches `scripts.js` and you'll swear nothing changed.
 
 ---
 
-## File Structure
+## Making a change and pushing it live
 
-<pre class="overflow-visible! px-0!" data-start="2456" data-end="2701"><div class="contain-inline-size rounded-2xl corner-superellipse/1.1 relative bg-token-sidebar-surface-primary"><div class="sticky top-[calc(var(--sticky-padding-top)+9*var(--spacing))]"><div class="absolute end-0 bottom-0 flex h-9 items-center pe-2"><div class="bg-token-bg-elevated-secondary text-token-text-secondary flex items-center gap-4 rounded-sm px-2 font-sans text-xs"></div></div></div><div class="overflow-y-auto p-4" dir="ltr"><code class="whitespace-pre!"><span><span>/index.html     → Embed-ready markup
-/styles.css     → Brand-aligned styling
-/scripts.js     → Search, parsing, matching, and rendering logic
-/data.js        → Street range dataset
-/data2.js       → Exact address dataset (when available)
-</span></span></code></div></div></pre>
+Netlify is hooked up to GitHub. Whatever you push to `main` is live in about a minute.
 
----
+1. Edit the file (see "When you need to change something" below)
+2. Open `index.html`, hard-refresh, confirm it works
+3. Commit and push:
+   ```bash
+   git add <file>
+   git commit -m "what you changed and why"
+   git push
+   ```
+4. Wait ~1 minute, check https://syr-common-councilor-lookup.netlify.app/
 
-## How the Tool Works
-
-1. User types an address into the search field
-2. Input is normalized (case, abbreviations, ordinals, punctuation)
-3. Address is parsed into:
-   * House number
-   * Street name
-   * Street base (without suffix)
-4. The tool attempts:
-   * Exact address match
-   * Street range match (including odd/even logic)
-   * Closest-match suggestion using string distance
-5. Results are rendered live as the user types
+If something looks off after deploy, revert the commit and push — Netlify redeploys the previous version.
 
 ---
 
-## How to Modify or Extend
+## The files
 
-### Updating Street Data
+It's a plain HTML/CSS/JS site.
 
-* Edit or replace the CSV-derived arrays in:
-  * `data.js`
-  * `data2.js`
-* Maintain column order to avoid breaking parsing logic
-
-### Updating Councilor Names
-
-* Update the `COUNCILOR_BY_DISTRICT` map in `scripts.js`
-
-### Styling / UX Changes
-
-* All visual changes should be made in `styles.css`
+- `index.html` — the page itself
+- `styles.css` — all the styling
+- `scripts.js` — the search logic
+- `data.js` — residential street ranges
+- `data2.js` — residential exact addresses (the exceptions)
+- `parcel_lookup_data.js` — every parcel in the city. This is what makes commercial addresses work — Destiny USA, City Hall, hotels, hospitals, all of it.
+- `Syracuse_Common_Council_Boundaries_(2023).geojson` — the district boundaries.
+- `council_data.py` — the Python script to build the JS data files.
 
 ---
 
-## Precautions
+## How it actually works
 
-* Always test changes with:
-  * Full addresses
-  * Partial addresses
-  * Abbreviations (St, Ave, Blvd, etc.)
-  * Ordinal streets (1st, 2nd, 3rd, etc.)
-* Test on mobile widths before merging
-* Keep language simple and resident-facing
+When someone types an address, `scripts.js` checks three datasets in this order:
+
+1. **`parcel_lookup_data.js`** first. This catches commercial and government buildings.
+2. **`data.js`** next. Residential street ranges (covers the bulk of homes).
+3. **`data2.js`** as a backup for residential exceptions.
+
+It stops at the first hit.
+
+The search updates live as you type:
+
+- Just a number → list of streets where that number exists
+- Number + part of a street → narrows down
+- Full address → the spotlight card pops up with district, ward, councilor, and a contact link
+- Just a street name → asks for a house number
+
+The parser handles the stuff people actually type — uppercase, lowercase, "St" vs "Street", "Ave" vs "Avenue", "1st" vs "first", "N Salina" vs "Salina N". All gets normalized to the same thing before matching.
 
 ---
 
-## Known Constraints
+## When you need to change something
 
-* Data accuracy depends entirely on the completeness of the street datasets
-* Non-standard addresses (rear lots, informal names) may require manual clarification
-* Tool does not validate USPS deliverability - it only matches council data
+**A councilor changed?** Edit `COUNCILOR_META_BY_DISTRICT` at the top of [scripts.js](scripts.js#L23-L44). Name and link for each district. That's it.
+
+**Need to refresh the data?**
+
+- Residential ranges → rebuild `data.js` from the City's street range source
+- Exact addresses → `data2.js`
+- Parcel data (commercial, etc.) → rebuild `parcel_lookup_data.js` from the City Parcels dataset: https://data.syr.gov/datasets/6dabdd6add9443128c2adc9bd6609051_0
+- `council_data.py` is a starting point for the regeneration
+
+If you rebuild `parcel_lookup_data.js` yourself, the rows have to stay in this order:
+
+```
+[houseNumber, streetName, fullAddress, CC_DIST, CITY_WARD, LAT, LONG, landUse]
+```
+
+Owner info is left out on purpose — this file is public.
+
+**Visual change?** Everything's in `styles.css`. No framework.
 
 ---
 
+## What still doesn't work
 
-## Notable Updates
+The code is fine. These are data gaps — they'd need to be fixed at the GIS source by NBD or the data team:
 
-| Date     | Change                    | Impact                                                  |
-| -------- | ------------------------- | ------------------------------------------------------- |
-| Feb 2026 | Initial release           | Residents can identify council representation instantly |
-| Feb 2026 | UX + branding refinements | Improved clarity, accessibility, and trust              |
+- `109 S Warren St` (State Tower) — not in the parcel feed at that number
+- `401 Harrison St` (Everson Museum)
+- `201 E Washington St` (City Hall Commons) — that block is filed under Salina St in the feed
+- Anything outside city limits — OCC, Hancock, anywhere in DeWitt/Salina/Onondaga town. These won't show up and shouldn't, since they're not in a council district.
+
+if you type a single letter after a space (like `233 E W`), you'll see "no matches" for a second because `S`/`N`/`E`/`W` get read as directionals. Type the next letter and it comes back. Annoying but minor.
+
+---
+
+## Changelog
+
+| Date     | What changed                                                                                                                                                                                                                                                 |
+| -------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| Feb 2026 | First release                                                                                                                                                                                                                                                |
+| Feb 2026 | UX + branding cleanup                                                                                                                                                                                                                                        |
+| May 2026 | Added the parcel lookup layer + suffix stripping. Commercial coverage went from 55% to 100%. Erick had flagged that commercial addresses weren't resolving — Caleb in the office had a call where every property on the block was commercial. This fixed it. |

@@ -132,7 +132,10 @@
     terrace: "terrace",
     terr: "terrace",
     pkwy: "parkway",
+    pky: "parkway",
     parkway: "parkway",
+    pk: "park",
+    park: "park",
     hwy: "highway",
     highway: "highway",
     cir: "circle",
@@ -140,6 +143,7 @@
     sq: "square",
     square: "square",
     way: "way",
+    park: "park",
     n: "north",
     north: "north",
     s: "south",
@@ -239,8 +243,58 @@
       .map((t) => normalizeOrdinal(TOKEN_MAP[t] || t));
   }
 
+  const DIRECTIONALS = new Set([
+    "north",
+    "south",
+    "east",
+    "west",
+    "northeast",
+    "northwest",
+    "southeast",
+    "southwest",
+  ]);
+
+  function normalizeStreetTokens(value) {
+    const tokens = normalizeTokens(value);
+    if (tokens.length < 2) return tokens;
+
+    const first = tokens[0];
+    const last = tokens[tokens.length - 1];
+
+    // GIS parcel data commonly stores directional streets as "SALINA ST N"
+    // while residents type "N Salina St". Normalize both to the same form.
+    if (!DIRECTIONALS.has(first) && DIRECTIONALS.has(last)) {
+      return [last, ...tokens.slice(0, -1)];
+    }
+
+    return tokens;
+  }
+
   function normalizeStreetName(value) {
-    return normalizeTokens(value).join(" ").trim();
+    return normalizeStreetTokens(value).join(" ").trim();
+  }
+
+  // GIS parcel data appends cross-street ("& HARRISON ST"), range-to
+  // ("TO TOWNSEND ST"), and rear-/condo-/unit-style suffixes onto the
+  // street column. Strip those before normalization so 233 E Washington St
+  // matches a parcel stored as "WASHINGTON ST E & MONTGOM".
+  function stripParcelStreetSuffix(value) {
+    return String(value || "")
+      .replace(/\s*&.*$/i, "")
+      .replace(/\s+TO\s+.*$/i, "")
+      .replace(/\s+REAR\b.*$/i, "")
+      .replace(/\s+CONDO\b.*$/i, "")
+      .replace(/\s+#\d.*$/i, "")
+      .trim();
+  }
+
+  function stripParcelAddressSuffix(value) {
+    return String(value || "")
+      .replace(/\s*&.*$/i, "")
+      .replace(/\s+TO\s+.*$/i, "")
+      .replace(/\s+REAR\b.*$/i, "")
+      .replace(/\s+CONDO\s*#?\d*.*$/i, "")
+      .trim();
   }
 
   function baseStreetName(tokens) {
@@ -291,7 +345,7 @@
       .replace(/\b(apt|unit|suite|#)\b.*$/i, "")
       .trim();
 
-    const tokens = normalizeTokens(restRaw);
+    const tokens = normalizeStreetTokens(restRaw);
     const streetNormalized = tokens.join(" ").trim();
     const streetBase = baseStreetName(tokens);
     const hasTypeToken = tokens.length
@@ -312,7 +366,7 @@
     const t = String(raw || "").trim();
     if (!t) return null;
 
-    const tokens = normalizeTokens(t);
+    const tokens = normalizeStreetTokens(t);
     const streetNormalized = tokens.join(" ").trim();
     if (!streetNormalized) return null;
 
@@ -332,6 +386,7 @@
   let dataLoaded = false;
   let rangeRows = [];
   let exactRows = [];
+  let parcelRows = [];
 
   function matchesOddEven(addressNumber, rangeType) {
     const t = String(rangeType || "").toLowerCase().trim();
@@ -374,6 +429,7 @@
 
     const rawRanges = window.STREET_DATA;
     const rawExact = window.STREET_DATA_V2;
+    const rawParcels = window.PARCEL_LOOKUP_DATA;
 
     if (!Array.isArray(rawRanges)) {
       setBanner(
@@ -443,6 +499,44 @@
           .filter(Boolean)
       : [];
 
+    parcelRows = Array.isArray(rawParcels)
+      ? rawParcels
+          .map((row) => {
+            const spec = String(row[0] || "").trim();
+            const streetRawOrig = String(row[1] || "").trim();
+            const fullAddressOrig = String(row[2] || "").trim();
+            const district = cleanDistrict(row[3]);
+            const ward = cleanWard(row[4]);
+            const lat = Number.parseFloat(row[5]);
+            const lon = Number.parseFloat(row[6]);
+            const landUse = String(row[7] || "").trim();
+
+            const numberSpec = parseNumberSpec(spec);
+            if (!numberSpec || !streetRawOrig || !district) return null;
+
+            const streetClean = stripParcelStreetSuffix(streetRawOrig);
+            const streetNorm = normalizeStreetName(streetClean || streetRawOrig);
+            const streetBase = baseStreetName(streetNorm.split(" "));
+            if (!streetNorm) return null;
+
+            const fullAddress = stripParcelAddressSuffix(fullAddressOrig) || fullAddressOrig;
+
+            return {
+              kind: "parcel",
+              numberSpec,
+              streetNorm,
+              streetBase,
+              ward,
+              district,
+              fullAddress,
+              lat: Number.isNaN(lat) ? null : lat,
+              lon: Number.isNaN(lon) ? null : lon,
+              landUse,
+            };
+          })
+          .filter(Boolean)
+      : [];
+
     dataLoaded = true;
     setBanner(loadError, "");
     return true;
@@ -455,6 +549,13 @@
 
   function exactRowMatchesNumber(row, n) {
     return n >= row.numberSpec.start && n <= row.numberSpec.end;
+  }
+
+  function rowMatchesNumber(row, n) {
+    if (!row) return false;
+    if (row.kind === "range") return rangeRowMatchesNumber(row, n);
+    if (row.numberSpec) return exactRowMatchesNumber(row, n);
+    return false;
   }
 
   function streetMatchesRow(streetQuery, row) {
@@ -476,7 +577,9 @@
     const seen = new Set();
 
     for (const r of rows) {
-      const k = `${r.streetNorm}|${r.district}|${r.ward}`;
+      const k = r.kind === "parcel"
+        ? `parcel|${r.fullAddress}|${r.district}|${r.ward}`
+        : `${r.kind}|${r.streetNorm}|${r.district}|${r.ward}`;
       if (seen.has(k)) continue;
       seen.add(k);
       out.push(r);
@@ -486,6 +589,12 @@
   }
 
   function findDirectCandidates(parsed) {
+    // Authoritative GIS parcel data first. This fills the commercial/government gap.
+    const parcelHits = parcelRows.filter(
+      (r) => rowMatchesNumber(r, parsed.number) && streetMatchesRow(parsed, r)
+    );
+    if (parcelHits.length) return dedupe(parcelHits);
+
     const rangeHits = rangeRows.filter(
       (r) =>
         rangeRowMatchesNumber(r, parsed.number) && streetMatchesRow(parsed, r)
@@ -508,8 +617,8 @@
 
     const hits = [];
 
-    for (const r of rangeRows) {
-      if (!rangeRowMatchesNumber(r, n)) continue;
+    for (const r of [...parcelRows, ...rangeRows]) {
+      if (!rowMatchesNumber(r, n)) continue;
 
       if (fragNorm) {
         const ok =
@@ -567,7 +676,23 @@
     return unique;
   }
 
+  function titleCaseRawAddress(value) {
+    return String(value || "")
+      .toLowerCase()
+      .split(/(\s+)/)
+      .map((part) => {
+        if (/^\s+$/.test(part)) return part;
+        const lower = part.toLowerCase();
+        const upperKeep = new Set(["usa", "ny", "suny", "cny"]);
+        if (upperKeep.has(lower)) return lower.toUpperCase();
+        if (DISPLAY_ABBR[lower]) return DISPLAY_ABBR[lower];
+        return lower.charAt(0).toUpperCase() + lower.slice(1);
+      })
+      .join("");
+  }
+
   function formatAddress(number, row) {
+    if (row && row.fullAddress) return titleCaseRawAddress(row.fullAddress);
     return `${number} ${titleCaseStreetFromNormalized(row.streetNorm || "")}`.trim();
   }
 
@@ -644,8 +769,7 @@
       tr.appendChild(councilTd);
 
       const pick = () => {
-        const streetDisplay = titleCaseStreetFromNormalized(row.streetNorm || "");
-        input.value = `${number} ${streetDisplay}`.trim();
+        input.value = formatAddress(number, row);
         renderSpotlight(row, number);
       };
 
@@ -737,7 +861,7 @@
         }
 
         hideResultsSection();
-        setBanner(noResults, "No matches found. Check the address and try again.", true);
+        setBanner(noResults, "No matches found. Check the street number and street name, then try again.", true);
         showResultsSection();
         return;
       }
@@ -776,7 +900,7 @@
       }
 
       hideResultsSection();
-      setBanner(noResults, "No matches found. Check the address and try again.", true);
+      setBanner(noResults, "No matches found. Check the street number and street name, then try again.", true);
       showResultsSection();
       return;
     }
