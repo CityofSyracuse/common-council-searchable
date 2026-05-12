@@ -1,4 +1,4 @@
-# gd Common Council District Lookup
+# Common Council District Lookup
 
 This is the lookup tool on syr.gov where residents can type their address and find out who their Common Councilor is.
 
